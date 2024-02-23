@@ -1,12 +1,11 @@
 
-
-
 import os
 import math
 import pandas
 from pandas import DataFrame
 from pandas import ExcelWriter
 
+# See README for complete explanation - basic logic: 
 
 # go through traning corpus and development corpus TWICE
 # FIRST TIME: gather each unique word and tag into arrays, sort and bin search as you go
@@ -23,20 +22,21 @@ from pandas import ExcelWriter
         tag3                                   word3
         *start*                                word4
 
-        rowNames   word1
-        tag1      
-        tag2
 """
 
 words = []
 tags = []
 emissionTable = []
 transitionTable = []
+paths = []
+
 
 def my_bin_search(arr, item):
+    # This is an implementation of binary search, used to quickly find the index of specific words or tags of interest
+    # Returns -1 if the array does not contain the item of interest
+
     lower = 0
     upper = len(arr)-1
-
     ret = -1
 
     while upper >= lower:
@@ -129,7 +129,91 @@ def parse_lines2(lines):
         emissionTable[find_index_bin][find_tag_index] = emissionTable[find_index_bin][find_tag_index] + 1
         transitionTable[find_tag_index][len(tags)] = transitionTable[find_tag_index][len(tags)] +1
 
+def calculate_probs(num, sentence):
+    # RECURSIVE DYNAMIC ALGORITHM
+    # given a sentence and number of words in a sentence, return the array of probabilities of each possible tag sequence 
+    # see README for full description
+    newprobs = []
+    newpaths = []
+
+    # base case: last word in sentence
+    if num == 1:
+        for i in range(0, len(tags)):
+            paths.append([i])
+        
+        for tag_index in range(0, len(tags)):
+            find_index_bin = my_bin_search(words, sentence[len(sentence)-num])
+            if find_index_bin < 0:
+                e_prob = 1
+            else:
+                e_prob = emissionTable[find_index_bin][tag_index]
+            
+            # Transition probability from this tag to <end> (end of sentence)
+            t_prob = transitionTable[tag_index][len(tags)]
+            
+            newprobs.append( e_prob*t_prob ) 
+        
+        return newprobs
     
+    # recursive call
+    probs = calculate_probs(num-1, sentence)
+
+    for tag_index in range(0, len(tags)):
+        max_prob = 0
+        max_prob_index = -1
+
+        # calc emission prob
+        find_index_bin = my_bin_search(words, sentence[len(sentence)-num])
+        if find_index_bin < 0:
+            e_prob = 1
+        else:
+            e_prob = emissionTable[find_index_bin][tag_index]
+
+        # if emission prob is zero, don't bother looping, all probabilities will be zero
+        if e_prob == 0:
+            max_prob = 0
+            max_prob_index = 0
+            newprobs.append(max_prob)
+            newpaths.append( [tag_index] + paths[max_prob_index] )
+            continue
+        
+        for prob_index in range(0, len(probs)):
+                            
+            # calc transition prob
+            t_prob = transitionTable[tag_index][prob_index]
+
+            if probs[prob_index] * e_prob * t_prob > max_prob:
+                max_prob = probs[prob_index] * e_prob * t_prob
+                max_prob_index = prob_index # tag index of the most probable next tag
+        newprobs.append(max_prob)
+        newpaths.append( [tag_index] + paths[max_prob_index] )
+
+    # update each stored path  
+    for i in range(0, len(paths)):
+        paths[i] = newpaths[i]
+    
+    return newprobs
+
+def get_tag_sequence(sentence, probs):
+    # given probability array, find the max (most probable path) and determine the corresponding tag sequence
+
+    max = 0
+    max_index = 0 # index of tag sequence with max probability
+
+    # find largest probability and its index
+    for i in range(0, len(probs)):
+        if probs[i] > max:
+            max = probs[i]
+            max_index = i
+
+    tag_seq_indices = paths[max_index]
+    tag_seq = []
+    for ind in tag_seq_indices:
+        tag_seq.append(tags[ind])
+
+    # return array of tag sequence
+    return tag_seq
+
 
 #######
 # add each word and tag to initial arrays
@@ -270,92 +354,9 @@ with ExcelWriter("output/emission_transition_tables.xlsx") as writer:
 
 
 ###### 
-# fill out testing file
+# parse untagged testing file, output tagged results
 ######
 
-paths = []
-
-# given number of words in a sentence, return the array of probabilities of each possible tag sequence 
-def calculate_probs(num, sentence):
-
-    newprobs = []
-    newpaths = []
-
-    # base case: last word
-    if num == 1:
-        for i in range(0, len(tags)):
-            paths.append([i])
-        
-        for tag_index in range(0, len(tags)):
-            find_index_bin = my_bin_search(words, sentence[len(sentence)-num])
-            if find_index_bin < 0:
-                e_prob = 1
-            else:
-                e_prob = emissionTable[find_index_bin][tag_index]
-            
-            t_prob = transitionTable[tag_index][len(tags)]
-            
-            newprobs.append( e_prob*t_prob ) 
-        
-        return newprobs
-    
-    # recur
-    probs = calculate_probs(num-1, sentence)
-
-    for tag_index in range(0, len(tags)):
-        max_prob = 0
-        max_prob_index = -1
-        # calc emission prob
-        find_index_bin = my_bin_search(words, sentence[len(sentence)-num])
-        if find_index_bin < 0:
-            e_prob = 1
-        else:
-            e_prob = emissionTable[find_index_bin][tag_index]
-
-        # if emission prob is zero, don't bother looping, all probabilities will be zero
-        if e_prob == 0:
-            max_prob = 0
-            max_prob_index = 0
-            newprobs.append(max_prob)
-            newpaths.append( [tag_index] + paths[max_prob_index] )
-            continue
-        
-        for prob_index in range(0, len(probs)):
-                            
-            # calc transition prob
-            t_prob = transitionTable[tag_index][prob_index]
-
-            if probs[prob_index] * e_prob * t_prob > max_prob:
-                max_prob = probs[prob_index] * e_prob * t_prob
-                max_prob_index = prob_index # tag index of the largest probable next tag
-        newprobs.append(max_prob)
-        newpaths.append( [tag_index] + paths[max_prob_index] )
-
-    #paths=newpaths
-    for i in range(0, len(paths)):
-        paths[i] = newpaths[i]
-    
-    return newprobs
-
-def get_tag_sequence(sentence, probs):
-    # given probability array, determine tag sequence
-
-    max = 0
-    max_index = 0 # index of tag sequence with max probability
-
-    # find largest probability and its index
-    for i in range(0, len(probs)):
-        if probs[i] > max:
-            max = probs[i]
-            max_index = i
-
-    tag_seq_indices = paths[max_index]
-    tag_seq = []
-    for ind in tag_seq_indices:
-        tag_seq.append(tags[ind])
-
-    # return array of tag sequence
-    return tag_seq
 
 # open development file, parse lines
 f = open("untagged-files/WSJ_23.words", 'r')
@@ -372,12 +373,11 @@ this_sentence = []
 for line in lines: 
     
     new_word = line.rstrip('\n')
-    # reading each word line 
     if (len(new_word) == 0 and len(this_sentence) > 0):
-
+        # found end of sentence; apply algorithm calculation
         sentence_prob = calculate_probs(len(this_sentence), this_sentence)
         
-        # one last multiply: transition from start -> each tag
+        # one last multiplication: transition from <start> -> each first tag
         for prob_index in range(0, len(sentence_prob)):
             # calc transition prob
             t_prob = transitionTable[len(tags)][prob_index]
@@ -387,6 +387,8 @@ for line in lines:
         for i in range(0, len(this_sentence)):
             fwrite.write(this_sentence[i] + "\t" + these_tags[i] + "\n")
         fwrite.write("\n")
+        
+        # restart arrays for next sentence
         this_sentence = []
         paths = []
     elif len(new_word) > 0:

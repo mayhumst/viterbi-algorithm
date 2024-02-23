@@ -1,5 +1,9 @@
 # viterbi-algorithm
 
+*Dynamic programming, recursion, Natural Language Processing, POS tagging, Hidden Markov Models (HMM)*
+
+---
+
 This is an implementation of a dynamic Viterbi algorithm to tag the part of speech of each word in a sentence. The algorithm follows these steps:
 
 1. Parse the training/development file once, adding each unique word and tag to an array of words and tags, and sort each array every time a new word or tag is added. This allows for binary search to be used during and after the initial parsing steps. 
@@ -10,7 +14,7 @@ This is an implementation of a dynamic Viterbi algorithm to tag the part of spee
 
 4. Go through the emission table, calculate each column total, and replace each raw value with the percentage of the column total. Repeat this for the transition table, but with row totals. 
 
-5. Export the tables to excel spreadsheets (currently commented out). This could make previously calculated data easier/faster to import and add to. 
+5. Export the tables to excel spreadsheets. This could make previously calculated data easier/faster to import and add to, but can be commented out for the sake of efficiency. 
 
 6. Open the untagged test file for parsing. Parse line by line until the end of a sentence is reached, then send that sentence to the recursive calculation function. 
 
